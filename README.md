@@ -25,13 +25,14 @@ The Markov Music Generator analyzes one or more MIDI files and uses a Markov cha
 
 ## Usage
 
-Command-Line Arguments
+### Command-Line Arguments
 
-- MIDI_FILE: One or more MIDI files to use as input for generating music.
-- -o, –order: (Optional) The order of the Markov chain (default is 3).
-- -of, –output-file: (Optional) The output MIDI file name (default is output.mid).
+- **MIDI_FILE**: One or more MIDI files to use as input for generating music.
+- **-o, --order**: *(Optional)* The order of the Markov chain (default is 3).
+- **-of, --output-file**: *(Optional)* The output MIDI file name (default is `output.mid`).
+- **-mm, --max-measures**: *(Optional)* The maximum number of measures to generate.
 
-## Running the Program
+### Running the Program
 
 python markov_music.py [OPTIONS] MIDI_FILE [MIDI_FILE ...]
 
@@ -56,9 +57,9 @@ python markov_music.py [OPTIONS] MIDI_FILE [MIDI_FILE ...]
 
 
 
-## Output
+### Output
 
-The generated MIDI file will be saved as output.mid in the current working directory.
+The generated MIDI file will be saved into the current working directory.
 
 ## How It Works
 
