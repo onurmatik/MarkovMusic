@@ -17,17 +17,11 @@ The Markov Music Generator analyzes one or more MIDI files and uses a Markov cha
 
 ### Prerequisites
 
-	•	Python 3.6 or higher
-
-### Required Libraries
-
-	•	mido: For MIDI file handling.
-	•	python-rtmidi: Optional, required if you plan to use real-time MIDI functionalities.
+- Python 3.6 or higher
 
 ### Install Dependencies
 
-pip install mido
-pip install python-rtmidi  # Optional, for real-time MIDI support
+    pip install mido
 
 ## Usage
 
