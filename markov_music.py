@@ -68,7 +68,7 @@ class Note:
 
 
 class MarkovMusic:
-    def __init__(self, files, order=3, output_file='output.mid'):
+    def __init__(self, files, order=3, output_file='output.mid', max_measures=None):
         self.output = []
         self.option_map = {}
         self.count_map = {}
@@ -76,12 +76,16 @@ class MarkovMusic:
         self.files = files  # List of MIDI files to process
         self.order = order  # Markov chain order, default is 3
         self.output_file = output_file  # Output MIDI file name
+        self.max_measures = max_measures  # Maximum number of measures to generate
         # Rounding properties of notes
         self.velocity_rounding = 40
         self.duration_rounding = 2000
         self.tempo_rounding = 1000000000
         self.target_channels = []
         self.default_tempo = 500001
+        # Time signature (defaults to 4/4 if not specified)
+        self.time_signature_numerator = 4
+        self.time_signature_denominator = 4  # Denominator as a power of 2 (e.g., 2=quarter note)
 
     def run(self):
         self.output = []
@@ -128,6 +132,7 @@ class MarkovMusic:
         tempo_values = []
         instrument_changes = []
         instrument_values = []
+        time_signature_changes = []
 
         current_tick = 0
 
@@ -155,40 +160,56 @@ class MarkovMusic:
                             open_notes.pop(j)
                             break
             elif msg.type == "program_change":
-                instrument_changes.append(current_tick)
-                instrument_values.append(msg.program)
+                instrument_changes.append((current_tick, msg.program))
             elif msg.type == "set_tempo":
-                tempo_changes.append(current_tick)
-                tempo_values.append(msg.tempo)
+                tempo_changes.append((current_tick, msg.tempo))
+            elif msg.type == "time_signature":
+                # Store time signature changes
+                numerator = msg.numerator
+                denominator = msg.denominator
+                time_signature_changes.append((current_tick, numerator, denominator))
 
         # Sort notes by timestamp
         notes.sort(key=lambda x: x.timestamp)
 
-        # Assign tempo and instrument to each note
+        # Assign tempo, instrument, and time signature to each note
         current_tempo = self.default_tempo
         current_instrument = 0
         tempo_idx = 0
         instrument_idx = 0
+        time_signature_idx = 0
 
-        tempo_changes.append(float("inf"))  # Sentinel value
-        instrument_changes.append(float("inf"))
+        tempo_changes.append((float("inf"), None))  # Sentinel value
+        instrument_changes.append((float("inf"), None))
+        time_signature_changes.append((float("inf"), None, None))
 
         for n in notes:
+            # Update tempo
             while (
                 tempo_idx < len(tempo_changes)
-                and n.timestamp >= tempo_changes[tempo_idx]
+                and n.timestamp >= tempo_changes[tempo_idx][0]
             ):
-                current_tempo = tempo_values[tempo_idx]
+                current_tempo = tempo_changes[tempo_idx][1]
                 tempo_idx += 1
             n.tempo = current_tempo
 
+            # Update instrument
             while (
                 instrument_idx < len(instrument_changes)
-                and n.timestamp >= instrument_changes[instrument_idx]
+                and n.timestamp >= instrument_changes[instrument_idx][0]
             ):
-                current_instrument = instrument_values[instrument_idx]
+                current_instrument = instrument_changes[instrument_idx][1]
                 instrument_idx += 1
             n.instrument = current_instrument
+
+            # Update time signature
+            while (
+                time_signature_idx < len(time_signature_changes)
+                and n.timestamp >= time_signature_changes[time_signature_idx][0]
+            ):
+                self.time_signature_numerator = time_signature_changes[time_signature_idx][1]
+                self.time_signature_denominator = time_signature_changes[time_signature_idx][2]
+                time_signature_idx += 1
 
         return notes
 
@@ -233,6 +254,13 @@ class MarkovMusic:
         current = []
         rand = random.choice(list(self.option_map.values()))
         current.append(random.choice(rand))
+        accumulated_ticks = 0
+        measures = 0
+        ticks_per_beat = self.resolution
+        beats_per_measure = self.time_signature_numerator
+        beat_value = self.time_signature_denominator
+        ticks_per_measure = ticks_per_beat * beats_per_measure * (4 / beat_value)
+
         while True:
             # Find the furthest back note to include in the subsequence for predicting
             lowest = max(0, len(current) - self.order)
@@ -246,6 +274,16 @@ class MarkovMusic:
             if add is None:
                 break
             current.append(add)
+
+            # Update accumulated ticks
+            accumulated_ticks += add.next_note_delay
+            # Check if we have reached the end of a measure
+            if accumulated_ticks >= ticks_per_measure * (measures + 1):
+                measures += 1
+                # Check if we've reached the maximum number of measures
+                if self.max_measures is not None and measures >= self.max_measures:
+                    print(f"Reached maximum number of measures: {self.max_measures}")
+                    break
         return current
 
     def pick(self, options, counts):
@@ -274,6 +312,16 @@ class MarkovMusic:
 
         # Set track name (meta event)
         track.append(mido.MetaMessage("track_name", name="midifile track"))
+
+        # Set time signature
+        track.append(
+            mido.MetaMessage(
+                "time_signature",
+                numerator=self.time_signature_numerator,
+                denominator=self.time_signature_denominator,
+                time=0,
+            )
+        )
 
         # Set omni on (control change)
         track.append(mido.Message("control_change", control=0x7D, value=0x00))
@@ -369,8 +417,20 @@ if __name__ == "__main__":
         default="output.mid",
         help="Output MIDI file name (default: output.mid)",
     )
+    parser.add_argument(
+        "-mm",
+        "--max-measures",
+        type=int,
+        default=None,
+        help="Maximum number of measures to generate",
+    )
 
     args = parser.parse_args()
 
-    m = MarkovMusic(files=args.files, order=args.order, output_file=args.output_file)
+    m = MarkovMusic(
+        files=args.files,
+        order=args.order,
+        output_file=args.output_file,
+        max_measures=args.max_measures,
+    )
     m.run()
