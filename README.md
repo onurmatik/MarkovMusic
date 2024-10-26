@@ -31,6 +31,7 @@ The Markov Music Generator analyzes one or more MIDI files and uses a Markov cha
 - **-o, --order**: *(Optional)* The order of the Markov chain (default is 3).
 - **-of, --output-file**: *(Optional)* The output MIDI file name (default is `output.mid`).
 - **-mm, --max-measures**: *(Optional)* The maximum number of measures to generate.
+- **-w, –weights**: (Optional) Comma-separated list of weights corresponding to the input files.
 
 ### Running the Program
 

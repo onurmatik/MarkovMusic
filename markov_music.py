@@ -68,7 +68,7 @@ class Note:
 
 
 class MarkovMusic:
-    def __init__(self, files, order=3, output_file='output.mid', max_measures=None):
+    def __init__(self, files, order=3, output_file='output.mid', max_measures=None, weights=None):
         self.output = []
         self.option_map = {}
         self.count_map = {}
@@ -77,6 +77,7 @@ class MarkovMusic:
         self.order = order  # Markov chain order, default is 3
         self.output_file = output_file  # Output MIDI file name
         self.max_measures = max_measures  # Maximum number of measures to generate
+        self.weights = weights  # List of weights for each input file
         # Rounding properties of notes
         self.velocity_rounding = 40
         self.duration_rounding = 2000
@@ -91,12 +92,18 @@ class MarkovMusic:
         self.output = []
         self.option_map = {}
         self.count_map = {}
-        for file_name in self.files:
-            print(f"Reading file: {file_name}")
+        if self.weights is None:
+            self.weights = [1.0] * len(self.files)  # Default weight of 1.0 for all files
+        elif len(self.weights) != len(self.files):
+            print("Error: The number of weights must match the number of input files.")
+            return
+        for idx, file_name in enumerate(self.files):
+            weight = self.weights[idx]  # get weight for this file
+            print(f"Reading file: {file_name} with weight {weight}")
             # Convert from a MIDI file to a list of parsed notes
             notes = self.read_input(file_name)
-            # Add the notes to the probability map
-            self.add_to_map(notes)
+            # Add the notes to the probability map with the given weight
+            self.add_to_map(notes, weight)
             print(f"{len(notes)} notes converted")
         print(f"\n{len(self.option_map)} mappings made (order {self.order})")
         print("Generating music")
@@ -223,7 +230,7 @@ class MarkovMusic:
             for note in list_of_notes
         ]
 
-    def add_to_map(self, notes):
+    def add_to_map(self, notes, weight=1.0):
         for i in range(len(notes)):
             # Add all subsequences up to the order as matches
             for j in range(i, max(i - self.order, -1), -1):
@@ -240,12 +247,12 @@ class MarkovMusic:
                 count_list = self.count_map[n]
                 try:
                     pos = option_list.index(s2)
-                    # Increase the counter
-                    count_list[pos] += 1
+                    # Increase the counter by the weight
+                    count_list[pos] += weight
                 except ValueError:
-                    # Add new entry
+                    # Add new entry with the weight
                     option_list.append(s2)
-                    count_list.append(1)
+                    count_list.append(weight)
 
     def generate(self):
         if not self.option_map:
@@ -287,14 +294,7 @@ class MarkovMusic:
         return current
 
     def pick(self, options, counts):
-        total = sum(counts)
-        rand = random.randint(1, total)
-        for i, count in enumerate(counts):
-            if rand <= count:
-                return options[i]
-            else:
-                rand -= count
-        return None
+        return random.choices(options, weights=counts, k=1)[0]
 
     def write_to_file(self):
         if not self.output:
@@ -424,13 +424,27 @@ if __name__ == "__main__":
         default=None,
         help="Maximum number of measures to generate",
     )
+    parser.add_argument(
+        "-w",
+        "--weights",
+        type=str,
+        default=None,
+        help="Comma-separated list of weights corresponding to the input files",
+    )
 
     args = parser.parse_args()
+
+    # Parse weights if provided
+    weights = None
+    if args.weights is not None:
+        weights_str_list = args.weights.split(',')
+        weights = [float(w.strip()) for w in weights_str_list]
 
     m = MarkovMusic(
         files=args.files,
         order=args.order,
         output_file=args.output_file,
         max_measures=args.max_measures,
+        weights=weights,
     )
     m.run()
